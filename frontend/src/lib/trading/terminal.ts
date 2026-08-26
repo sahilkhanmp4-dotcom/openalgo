@@ -590,9 +590,20 @@ export class TradingTerminal {
     return Math.max(t, Number((Math.round((c * 0.0015) / t) * t).toFixed(this.dp())))
   }
 
-  private setPriceData() {
+  private setPriceData(preserveRange = true) {
     if (!this.price || !this.volume || !this.rawBars.length) return
     const cfg = CHART_TYPES[this.ctype] || CHART_TYPES.candlestick
+
+    // Save user's current zoom and visible window before updating series data
+    let beforeRange: { from: number; to: number } | null = null
+    if (preserveRange && this.chart) {
+      try {
+        beforeRange = this.chart.getVisibleLogicalRange()
+      } catch {
+        beforeRange = null
+      }
+    }
+
     if (cfg.transform) {
       const t = runTransform(cfg.transform(this.boxOf()), this.rawBars)
       this.price.setData(t)
@@ -612,6 +623,15 @@ export class TradingTerminal {
       this.shownBars = this.rawBars
     }
     this.shownCount = this.shownBars.length
+
+    // Lock and restore user's zoom level so live ticks NEVER reset zoom
+    if (beforeRange && this.chart) {
+      try {
+        this.chart.setVisibleLogicalRange(beforeRange)
+      } catch {
+        /* range out of bounds */
+      }
+    }
   }
 
   private bucketVolume(tbars: Bar[]): Bar[] {

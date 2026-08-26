@@ -315,7 +315,7 @@ export function ScalpChart({
           return
         }
         candlesRef.current = new Map(candles.map((k) => [k.time, { ...k }]))
-        applyModel(false)
+        applyModel(readyRef.current)
         currentBucketRef.current = candles[candles.length - 1].time
         setStatus('')
         readyRef.current = true
