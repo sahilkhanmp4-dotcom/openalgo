@@ -24,6 +24,33 @@ from utils.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _auto_set_bracket_if_requested(order_data: dict[str, Any]):
+    """Automatically activates bracket Stop Loss / Target if provided in order payload."""
+    sl = order_data.get("stoploss")
+    tg = order_data.get("target")
+    if sl or tg:
+        try:
+            from database.bracket_db import save_or_update_bracket
+            sl_val = float(sl) if sl else 0.0
+            tg_val = float(tg) if tg else 0.0
+            if sl_val > 0 or tg_val > 0:
+                bracket_dict = {
+                    "symbol": order_data.get("symbol"),
+                    "exchange": order_data.get("exchange", "NSE"),
+                    "product": order_data.get("product", "MIS"),
+                    "position_type": order_data.get("action", "BUY").upper(),
+                    "quantity": int(order_data.get("quantity") or 1),
+                    "entry_price": float(order_data.get("price") or 0.0),
+                    "stoploss_price": sl_val,
+                    "target_price": tg_val,
+                    "trailing_sl": bool(order_data.get("trailing_sl", False)),
+                    "trailing_step": float(order_data.get("trailing_step", 5.0)),
+                }
+                save_or_update_bracket(bracket_dict)
+                logger.info(f"[SMART BRACKET] Auto-saved bracket protection for {order_data.get('symbol')} SL={sl_val} TG={tg_val}")
+        except Exception as e:
+            logger.error(f"[SMART BRACKET ERROR] Could not auto-save bracket: {e}")
+
 
 def emit_analyzer_error(request_data: dict[str, Any], error_message: str) -> dict[str, Any]:
     """Publish an analyzer error event and return the error response dict."""
@@ -193,6 +220,7 @@ def place_smart_order_with_auth(
                 request_data=analyzer_request, response_data=response_data,
                 api_key=api_key,
             ))
+            _auto_set_bracket_if_requested(order_data)
 
         return success, response_data, status_code
 
@@ -246,6 +274,7 @@ def place_smart_order_with_auth(
                 request_data=order_request_data, response_data=order_response_data,
                 api_key=api_key,
             ))
+            _auto_set_bracket_if_requested(order_data)
 
     except Exception as e:
         logger.exception(f"Error in broker_module.place_smartorder_api: {e}")

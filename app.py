@@ -53,6 +53,9 @@ from blueprints.apikey import api_key_bp
 from blueprints.arbitrage import arbitrage_bp  # Import the Arbitrage blueprint
 from blueprints.auth import auth_bp
 from blueprints.brlogin import brlogin_bp
+from blueprints.bracket_orders import (
+    bracket_orders_bp,  # Import TradingView Bracket SL/TP blueprint
+)
 from blueprints.broker_credentials import (
     broker_credentials_bp,  # Import the broker credentials blueprint
 )
@@ -115,6 +118,7 @@ from database.analyzer_db import init_db as ensure_analyzer_tables_exists
 from database.apilog_db import init_db as ensure_api_log_tables_exists
 from database.apscheduler_jobstore_db import ensure_jobstore_tables_exist
 from database.auth_db import init_db as ensure_auth_tables_exists
+from database.bracket_db import init_db as ensure_bracket_tables_exists
 from database.chartink_db import init_db as ensure_chartink_tables_exists
 from database.flow_db import init_db as ensure_flow_tables_exists
 from database.historify_db import init_database as ensure_historify_tables_exists
@@ -281,6 +285,7 @@ def create_app():
 
     # Exempt API endpoints from CSRF protection (they use API key authentication)
     csrf.exempt(api_v1_bp)
+    csrf.exempt(bracket_orders_bp)
 
     # Initialize security middleware before traffic logging
     init_security_middleware(app)
@@ -338,6 +343,30 @@ def create_app():
     app.register_blueprint(system_permissions_bp)  # Register System permissions blueprint
     app.register_blueprint(strategy_portfolio_bp)  # Register Strategy Portfolio blueprint
     app.register_blueprint(postback_bp)  # Register broker postback (order-update webhook) blueprint
+    app.register_blueprint(bracket_orders_bp)  # Register TradingView Bracket SL/TP blueprint
+    from database.bracket_db import init_db as init_bracket_db
+    init_bracket_db()
+    from services.bracket_service import BracketManager
+    BracketManager.get_instance()
+
+    # Live Algo Execution & Orderbook Registry routes
+    from flask import jsonify, request
+    from quant_engine.deployer import LiveAlgoRegistry
+
+    @app.route("/api/live/algos", methods=["GET"])
+    def main_api_live_algos():
+        return jsonify(LiveAlgoRegistry.get_running_algos())
+
+    @app.route("/api/live/orderbook", methods=["GET"])
+    def main_api_live_orderbook():
+        return jsonify(LiveAlgoRegistry.get_orderbook())
+
+    @app.route("/api/live/action", methods=["POST"])
+    def main_api_live_action():
+        req = request.get_json() or {}
+        algo_id = req.get("algo_id")
+        action = req.get("action")
+        return jsonify(LiveAlgoRegistry.perform_action(algo_id, action))
 
     # Remote MCP (HTTP + OAuth) — opt-in via MCP_HTTP_ENABLED. Off by default.
     # Pre-flight refusal: must NEVER coexist with FLASK_DEBUG=True (debug-mode
@@ -522,6 +551,8 @@ def create_app():
                 "/download",
                 "/faq",
                 "/login",  # React login page
+                "/bracket-orders",
+                "/bracket",
             ]
             or request.path.startswith("/auth/broker/")  # OAuth callbacks
             or request.path.startswith("/_reload-ws")
@@ -724,6 +755,7 @@ def setup_environment(app):
                 ("Scalping DB", ensure_scalping_tables_exists),
                 ("Leverage DB", ensure_leverage_tables_exists),
                 ("Strategy Portfolio DB", ensure_strategy_portfolio_tables_exists),
+                ("Bracket DB", ensure_bracket_tables_exists),
                 # Created here, not left to APScheduler's own CREATE TABLE in
                 # scheduler.start(). That DDL would otherwise run further down
                 # this function, after db_ready releases the rest of the boot,
@@ -1202,4 +1234,4 @@ if __name__ == "__main__":
             flush=True,
         )
 
-    socketio.run(app, host=host_ip, port=port, debug=debug, reloader_options=reloader_options)
+    socketio.run(app, host=host_ip, port=port, debug=debug, reloader_options=reloader_options, allow_unsafe_werkzeug=True)

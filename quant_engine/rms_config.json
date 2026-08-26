@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "max_daily_loss": 6000.0,
+  "max_daily_profit": 30000.0,
+  "max_open_positions": 4,
+  "max_capital_per_trade": 60000.0,
+  "is_locked": false,
+  "lock_reason": "",
+  "daily_realized_pnl": 0.0,
+  "last_reset_date": "2026-08-26"
+}

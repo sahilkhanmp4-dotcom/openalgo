@@ -10,6 +10,7 @@ import {
   Radio,
   RefreshCw,
   Settings2,
+  ShieldCheck,
   TrendingDown,
   TrendingUp,
   X,
@@ -40,6 +41,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Table,
@@ -169,6 +171,100 @@ export default function Positions() {
   const [sortColumn, setSortColumn] = useState<SortColumn>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const [settingsOpen, setSettingsOpen] = useState(false)
+
+  // TradingView-Style Bracket SL & Target Dialog State
+  const [bracketDialogOpen, setBracketDialogOpen] = useState(false)
+  const [selectedPosition, setSelectedPosition] = useState<Position | null>(null)
+  const [bracketSl, setBracketSl] = useState('')
+  const [bracketTg, setBracketTg] = useState('')
+  const [bracketTrailing, setBracketTrailing] = useState(false)
+  const [bracketTrailStep, setBracketTrailStep] = useState('5.0')
+  const [activeBrackets, setActiveBrackets] = useState<any[]>([])
+  const [isSavingBracket, setIsSavingBracket] = useState(false)
+
+  const fetchBrackets = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/bracket/positions')
+      const data = await res.json()
+      if (data.status === 'success' && data.brackets) {
+        setActiveBrackets(data.brackets)
+      }
+    } catch (_e) {}
+  }, [])
+
+  useEffect(() => {
+    fetchBrackets()
+  }, [fetchBrackets])
+
+  const handleOpenBracketModal = (position: Position) => {
+    setSelectedPosition(position)
+    const isLong = (position.quantity || 0) > 0
+    const avg = Number(position.average_price) || Number(position.ltp) || 0
+    const existing = activeBrackets.find(
+      (b) => b.symbol?.toUpperCase() === position.symbol?.toUpperCase() && b.status === 'ACTIVE'
+    )
+
+    if (existing) {
+      setBracketSl(String(existing.stoploss_price || ''))
+      setBracketTg(String(existing.target_price || ''))
+      setBracketTrailing(Boolean(existing.trailing_sl))
+      setBracketTrailStep(String(existing.trailing_step || '5.0'))
+    } else {
+      const defSl = isLong ? (avg * 0.99).toFixed(2) : (avg * 1.01).toFixed(2)
+      const defTg = isLong ? (avg * 1.02).toFixed(2) : (avg * 0.98).toFixed(2)
+      setBracketSl(defSl)
+      setBracketTg(defTg)
+      setBracketTrailing(false)
+      setBracketTrailStep('5.0')
+    }
+    setBracketDialogOpen(true)
+  }
+
+  const handleSaveBracket = async () => {
+    if (!selectedPosition) return
+    const sl = parseFloat(bracketSl)
+    const tg = parseFloat(bracketTg)
+    const trailStep = parseFloat(bracketTrailStep) || 5.0
+    const isLong = (selectedPosition.quantity || 0) > 0
+    const avgPrice = Number(selectedPosition.average_price) || Number(selectedPosition.ltp) || 0
+
+    if (!sl || sl <= 0) {
+      showToast.error('Please enter a valid Stop Loss price', 'positions')
+      return
+    }
+
+    setIsSavingBracket(true)
+    try {
+      const res = await fetch('/api/v1/bracket/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbol: selectedPosition.symbol,
+          exchange: selectedPosition.exchange,
+          product: selectedPosition.product,
+          position_type: isLong ? 'BUY' : 'SELL',
+          quantity: Math.abs(selectedPosition.quantity || 0),
+          entry_price: avgPrice,
+          stoploss_price: sl,
+          target_price: tg > 0 ? tg : 0,
+          trailing_sl: bracketTrailing,
+          trailing_step: trailStep,
+        }),
+      })
+      const data = await res.json()
+      if (data.status === 'success') {
+        showToast.success(`🛡️ Bracket SL/Target Activated for ${selectedPosition.symbol}`, 'positions')
+        fetchBrackets()
+        setBracketDialogOpen(false)
+      } else {
+        showToast.error(data.message || 'Failed to set bracket', 'positions')
+      }
+    } catch (err: any) {
+      showToast.error(err.message || 'Network error', 'system')
+    } finally {
+      setIsSavingBracket(false)
+    }
+  }
 
   // Centralized real-time price hook with WebSocket + MultiQuotes fallback
   // Automatically pauses when tab is hidden
@@ -947,82 +1043,116 @@ export default function Positions() {
 
                         {/* Position Rows */}
                         {!isCollapsed &&
-                          groupPositions.map((position, index) => (
-                            <TableRow key={`${position.symbol}-${position.exchange}-${index}`}>
-                              <TableCell className="w-[140px] font-medium">
-                                {position.symbol}
-                              </TableCell>
-                              <TableCell className="w-[80px]">
-                                <Badge
-                                  variant="outline"
-                                  className={EXCHANGE_COLORS[position.exchange] || ''}
-                                >
-                                  {position.exchange}
-                                </Badge>
-                              </TableCell>
-                              {!isCrypto && (
+                          groupPositions.map((position, index) => {
+                            const activeB = activeBrackets.find(
+                              (b) =>
+                                b.symbol?.toUpperCase() === position.symbol?.toUpperCase() &&
+                                b.status === 'ACTIVE'
+                            )
+
+                            return (
+                              <TableRow
+                                key={`${position.symbol}-${position.exchange}-${index}`}
+                                className="cursor-pointer hover:bg-muted/70 transition-colors"
+                                onContextMenu={(e) => {
+                                  e.preventDefault()
+                                  handleOpenBracketModal(position)
+                                }}
+                                title="Right click to Modify Stop Loss & Target"
+                              >
+                                <TableCell className="w-[160px] font-medium">
+                                  <div className="font-semibold">{position.symbol}</div>
+                                  {activeB && (
+                                    <div className="text-[10px] text-emerald-500 dark:text-emerald-400 font-mono mt-0.5 flex items-center gap-1">
+                                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                      SL: ₹{activeB.stoploss_price} | TP: ₹{activeB.target_price}
+                                      {activeB.trailing_sl ? ' ⚡' : ''}
+                                    </div>
+                                  )}
+                                </TableCell>
                                 <TableCell className="w-[80px]">
                                   <Badge
                                     variant="outline"
-                                    className={PRODUCT_COLORS[position.product] || ''}
+                                    className={EXCHANGE_COLORS[position.exchange] || ''}
                                   >
-                                    {position.product}
+                                    {position.exchange}
                                   </Badge>
                                 </TableCell>
-                              )}
-                              <TableCell
-                                className={cn(
-                                  'w-[80px] text-right font-medium',
-                                  position.quantity > 0 ? 'text-green-600' : 'text-red-600'
+                                {!isCrypto && (
+                                  <TableCell className="w-[80px]">
+                                    <Badge
+                                      variant="outline"
+                                      className={PRODUCT_COLORS[position.product] || ''}
+                                    >
+                                      {position.product}
+                                    </Badge>
+                                  </TableCell>
                                 )}
-                              >
-                                {position.quantity}
-                              </TableCell>
-                              <TableCell className="w-[120px] text-right font-mono">
-                                {formatCurrency(position.average_price)}
-                              </TableCell>
-                              <TableCell className="w-[120px] text-right font-mono">
-                                {position.ltp !== undefined ? formatCurrency(position.ltp) : '-'}
-                              </TableCell>
-                              <TableCell
-                                className={cn(
-                                  'w-[120px] text-right font-medium',
-                                  isProfit(position.pnl) ? 'text-green-600' : 'text-red-600'
-                                )}
-                              >
-                                <div className="flex items-center justify-end gap-1">
-                                  {isProfit(position.pnl) ? (
-                                    <TrendingUp className="h-4 w-4" />
-                                  ) : (
-                                    <TrendingDown className="h-4 w-4" />
+                                <TableCell
+                                  className={cn(
+                                    'w-[80px] text-right font-medium',
+                                    position.quantity > 0 ? 'text-green-600' : 'text-red-600'
                                   )}
-                                  {formatCurrency(position.pnl)}
-                                </div>
-                              </TableCell>
-                              <TableCell
-                                className={cn(
-                                  'w-[100px] text-right',
-                                  isProfit(calculatePnlPercent(position))
-                                    ? 'text-green-600'
-                                    : 'text-red-600'
-                                )}
-                              >
-                                {calculatePnlPercent(position) >= 0 ? '+' : ''}
-                                {calculatePnlPercent(position).toFixed(2)}%
-                              </TableCell>
-                              <TableCell className="w-[60px] text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => handleClosePosition(position)}
-                                  aria-label={`Close ${position.symbol} position`}
                                 >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                                  {position.quantity}
+                                </TableCell>
+                                <TableCell className="w-[120px] text-right font-mono">
+                                  {formatCurrency(position.average_price)}
+                                </TableCell>
+                                <TableCell className="w-[120px] text-right font-mono">
+                                  {position.ltp !== undefined ? formatCurrency(position.ltp) : '-'}
+                                </TableCell>
+                                <TableCell
+                                  className={cn(
+                                    'w-[120px] text-right font-medium',
+                                    isProfit(position.pnl) ? 'text-green-600' : 'text-red-600'
+                                  )}
+                                >
+                                  <div className="flex items-center justify-end gap-1">
+                                    {isProfit(position.pnl) ? (
+                                      <TrendingUp className="h-4 w-4" />
+                                    ) : (
+                                      <TrendingDown className="h-4 w-4" />
+                                    )}
+                                    {formatCurrency(position.pnl)}
+                                  </div>
+                                </TableCell>
+                                <TableCell
+                                  className={cn(
+                                    'w-[100px] text-right',
+                                    isProfit(calculatePnlPercent(position))
+                                      ? 'text-green-600'
+                                      : 'text-red-600'
+                                  )}
+                                >
+                                  {calculatePnlPercent(position) >= 0 ? '+' : ''}
+                                  {calculatePnlPercent(position).toFixed(2)}%
+                                </TableCell>
+                                <TableCell className="w-[80px] text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 px-1.5 h-8"
+                                      onClick={() => handleOpenBracketModal(position)}
+                                      title="Set / Modify Bracket SL & Target (TradingView style)"
+                                    >
+                                      <ShieldCheck className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-destructive hover:text-destructive hover:bg-destructive/10 px-1.5 h-8"
+                                      onClick={() => handleClosePosition(position)}
+                                      aria-label={`Close ${position.symbol} position`}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
                       </React.Fragment>
                     )
                   })}
@@ -1049,6 +1179,183 @@ export default function Positions() {
           )}
         </CardContent>
       </Card>
+
+      {/* TradingView-Style Bracket SL & Target Modal */}
+      <Dialog open={bracketDialogOpen} onOpenChange={setBracketDialogOpen}>
+        <DialogContent className="sm:max-w-[460px] bg-slate-900 border-slate-800 text-slate-100 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg text-white font-bold">
+              <span className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400">🛡️</span>
+              TradingView Bracket Protection (SL & TP)
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-400">
+              Modify Stop Loss and Target levels with automated OCO (One-Cancels-Other) real-time exit.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedPosition && (
+            <div className="space-y-4 py-2">
+              {/* Position Summary Card */}
+              <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                <div>
+                  <div className="font-bold text-white font-mono text-sm">
+                    {selectedPosition.symbol}
+                  </div>
+                  <div className="text-slate-400 font-mono mt-0.5">
+                    <span
+                      className={
+                        selectedPosition.quantity > 0
+                          ? 'text-emerald-400 font-bold'
+                          : 'text-rose-400 font-bold'
+                      }
+                    >
+                      {selectedPosition.quantity > 0 ? 'BUY' : 'SELL'} (
+                      {Math.abs(selectedPosition.quantity)} Qty)
+                    </span>{' '}
+                    &bull; {selectedPosition.exchange} &bull; {selectedPosition.product}
+                  </div>
+                </div>
+                <div className="text-right font-mono">
+                  <div>
+                    Avg:{' '}
+                    <span className="text-white font-semibold">
+                      {formatCurrency(selectedPosition.average_price)}
+                    </span>
+                  </div>
+                  <div>
+                    LTP:{' '}
+                    <span className="text-indigo-400 font-semibold">
+                      {selectedPosition.ltp !== undefined
+                        ? formatCurrency(selectedPosition.ltp)
+                        : '-'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stop Loss Input */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs font-semibold text-rose-400">
+                  <Label htmlFor="bracket-sl" className="text-rose-400">
+                    🛡️ Stop Loss Price (SL)
+                  </Label>
+                  {(() => {
+                    const avg =
+                      Number(selectedPosition.average_price) || Number(selectedPosition.ltp) || 0
+                    const sl = parseFloat(bracketSl)
+                    if (avg > 0 && sl > 0) {
+                      const diff = Math.abs(avg - sl).toFixed(2)
+                      const pct = ((Number(diff) / avg) * 100).toFixed(1)
+                      return (
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          -{diff} pts (-{pct}%)
+                        </span>
+                      )
+                    }
+                    return null
+                  })()}
+                </div>
+                <Input
+                  id="bracket-sl"
+                  type="number"
+                  step="0.05"
+                  placeholder="e.g. 150.00"
+                  value={bracketSl}
+                  onChange={(e) => setBracketSl(e.target.value)}
+                  className="bg-slate-950 border-rose-500/40 text-rose-300 font-mono focus:border-rose-500"
+                />
+              </div>
+
+              {/* Target Input */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs font-semibold text-emerald-400">
+                  <Label htmlFor="bracket-tg" className="text-emerald-400">
+                    🎯 Target Price (TP)
+                  </Label>
+                  {(() => {
+                    const avg =
+                      Number(selectedPosition.average_price) || Number(selectedPosition.ltp) || 0
+                    const tg = parseFloat(bracketTg)
+                    if (avg > 0 && tg > 0) {
+                      const diff = Math.abs(tg - avg).toFixed(2)
+                      const pct = ((Number(diff) / avg) * 100).toFixed(1)
+                      return (
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          +{diff} pts (+{pct}%)
+                        </span>
+                      )
+                    }
+                    return null
+                  })()}
+                </div>
+                <Input
+                  id="bracket-tg"
+                  type="number"
+                  step="0.05"
+                  placeholder="e.g. 180.00"
+                  value={bracketTg}
+                  onChange={(e) => setBracketTg(e.target.value)}
+                  className="bg-slate-950 border-emerald-500/40 text-emerald-300 font-mono focus:border-emerald-500"
+                />
+              </div>
+
+              {/* Trailing Stop Loss */}
+              <div className="bg-purple-950/30 p-3 rounded-xl border border-purple-500/30 space-y-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="trail-cb"
+                    checked={bracketTrailing}
+                    onChange={(e) => setBracketTrailing(e.target.checked)}
+                    className="rounded border-purple-500 text-purple-600 focus:ring-0 cursor-pointer"
+                  />
+                  <Label
+                    htmlFor="trail-cb"
+                    className="text-xs font-semibold text-purple-300 cursor-pointer"
+                  >
+                    ⚡ Enable Trailing Stop Loss
+                  </Label>
+                </div>
+                {bracketTrailing && (
+                  <div className="pt-1 flex items-center gap-2">
+                    <span className="text-[11px] text-slate-400">Trail Step (₹):</span>
+                    <Input
+                      type="number"
+                      step="0.5"
+                      value={bracketTrailStep}
+                      onChange={(e) => setBracketTrailStep(e.target.value)}
+                      className="h-8 w-28 bg-slate-950 border-purple-500/40 text-purple-300 font-mono text-xs"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-2">
+            {selectedPosition && (
+              <Button
+                variant="outline"
+                className="text-rose-400 border-rose-500/40 hover:bg-rose-500/10 text-xs"
+                onClick={() => {
+                  setBracketDialogOpen(false)
+                  handleClosePosition(selectedPosition)
+                }}
+              >
+                Exit Market
+              </Button>
+            )}
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
+              onClick={handleSaveBracket}
+              disabled={isSavingBracket}
+            >
+              {isSavingBracket ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+              🛡️ Set / Update Bracket Protection
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

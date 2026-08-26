@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, FileText, GraduationCap, Search, Zap } from 'lucide-react'
+import { Activity, BarChart3, BookOpen, FileText, GraduationCap, Search, Zap } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { Badge } from '@/components/ui/badge'
@@ -202,6 +202,29 @@ export default function Dashboard() {
   }
 
   const quickAccessCards = [
+    {
+      href: 'http://127.0.0.1:8888',
+      label: '⚡ Antigravity AI Studio (Fyers & Crypto)',
+      description: 'Institutional AI Strategy Lab, SMC (OrderBlocks/FVG/BOS), Python Code Synthesis & 1-Click Execution',
+      icon: Zap,
+      gradient:
+        'from-indigo-500/20 to-purple-500/10 hover:from-indigo-500/30 hover:to-purple-500/20',
+      iconBg: 'bg-indigo-500/20',
+      iconColor: 'text-indigo-400',
+      borderColor: 'border-indigo-500/30 hover:border-indigo-500/60',
+      external: true,
+    },
+    {
+      href: '/orderbook',
+      label: '⚡ Running Algos & Live Orderbook',
+      description: 'Live executed orders with Buying/Selling Price, Entry/Exit Times & Net Realized P&L',
+      icon: Activity,
+      gradient:
+        'from-emerald-500/10 to-emerald-500/5 hover:from-emerald-500/20 hover:to-emerald-500/10',
+      iconBg: 'bg-emerald-500/20',
+      iconColor: 'text-emerald-500',
+      borderColor: 'border-emerald-500/20 hover:border-emerald-500/40',
+    },
     {
       href: '/search',
       label: 'OpenAlgo Symbols',

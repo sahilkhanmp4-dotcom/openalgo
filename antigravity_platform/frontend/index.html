@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antigravity AlgoStudio 2.0 - Institutional AI Strategy Lab & Multi-Broker Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkbg: '#0a0e17',
+                        cardbg: '#111827',
+                        bordercolor: '#1f293d',
+                        primary: '#6366f1',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0a0e17; color: #f3f4f6; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col custom-scrollbar">
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Header Navigation -->
+    <header class="border-b border-bordercolor bg-cardbg/80 backdrop-blur sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center font-bold text-xl text-white shadow-lg shadow-indigo-500/25">
+                    ⚡
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-white flex items-center gap-2">
+                        Antigravity <span class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">AlgoStudio 2.0</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Institutional Strategy Builder &bull; Fyers API &bull; Crypto Gateway &bull; Live Execution</p>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex flex-wrap items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-xl">
+                <button onclick="switchTab('tab-ai-builder')" id="nav-ai-builder" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white shadow transition flex items-center gap-1.5">
+                    <i data-lucide="sparkles" class="h-3.5 w-3.5"></i> 🧠 AI Strategy Lab
+                </button>
+                <button onclick="switchTab('tab-python-editor')" id="nav-python-editor" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition flex items-center gap-1.5">
+                    <i data-lucide="code" class="h-3.5 w-3.5"></i> 💻 Python Editor
+                </button>
+                <button onclick="switchTab('tab-live-orderbook')" id="nav-live-orderbook" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg text-emerald-400 hover:text-white transition flex items-center gap-1.5 border border-emerald-500/30 bg-emerald-500/10">
+                    <i data-lucide="activity" class="h-3.5 w-3.5 text-emerald-400 animate-pulse"></i> ⚡ Live Bots & Orderbook (<span id="running-count">0</span>)
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full space-y-6">
+
+        <!-- =================================================================== -->
+        <!-- TAB 1: AI STRATEGY LAB & BUILDER -->
+        <!-- =================================================================== -->
+        <div id="tab-ai-builder" class="space-y-6">
+            
+            <!-- AI Prompt Ingestion Card -->
+            <div class="bg-cardbg border border-bordercolor rounded-2xl p-6 shadow-xl space-y-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="p-2 rounded-lg bg-indigo-500/20 text-indigo-400">
+                            <i data-lucide="bot" class="h-5 w-5"></i>
+                        </span>
+                        <div>
+                            <h2 class="text-base font-bold text-white">Antigravity AI Strategy Compiler</h2>
+                            <p class="text-xs text-slate-400">Apni trading condition Hindi, Hinglish ya English me likhein (SMC, Price Action, Indicators)</p>
+                        </div>
+                    </div>
+                    <span class="text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold flex items-center gap-1">
+                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping"></span> Antigravity AI Engine Live
+                    </span>
+                </div>
+
+                <div class="relative">
+                    <textarea id="ai-prompt" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition font-sans" placeholder="Example: Fyers par Nifty 5m me jab SMC Order Block retest ho aur Bullish CHoCH bane tab Buy karo, Stop Loss 0.8%, Target 2.4% (1:3 RR)"></textarea>
+                </div>
+
+                <!-- Quick Presets -->
+                <div class="flex flex-wrap items-center gap-2 pt-1">
+                    <span class="text-xs text-slate-400 font-semibold">⚡ Quick Presets:</span>
+                    <button onclick="setPromptPreset('smc_nifty')" class="px-2.5 py-1 text-xs rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-600 hover:text-white transition">🏛️ SMC Nifty 1:3 RR (Fyers)</button>
+                    <button onclick="setPromptPreset('crypto_btc')" class="px-2.5 py-1 text-xs rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-600 hover:text-white transition">🪙 BTC/USDT SMC Perp (Binance)</button>
+                    <button onclick="setPromptPreset('supertrend')" class="px-2.5 py-1 text-xs rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-indigo-600 hover:text-white transition">🚀 Supertrend (7, 3)</button>
+                    <button onclick="setPromptPreset('vwap')" class="px-2.5 py-1 text-xs rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-indigo-600 hover:text-white transition">🌊 VWAP Pullback (BankNifty)</button>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-2">
+                    <button onclick="compileAIPrompt()" id="btn-compile" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition">
+                        <i data-lucide="sparkles" class="h-4 w-4"></i> 🧠 Compile Algo & Synthesize Code
+                    </button>
+                </div>
+            </div>
+
+            <!-- Parameters & Searchable Instrument Selector -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 bg-cardbg border border-bordercolor rounded-2xl p-6 shadow-xl">
+                <!-- Broker Gateway -->
+                <div>
+                    <label class="text-xs text-slate-400 font-semibold block mb-1">Target Broker Gateway</label>
+                    <select id="cfg-broker" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white">
+                        <option value="FYERS">🇮🇳 Fyers API (via OpenAlgo :5000)</option>
+                        <option value="BINANCE">🌐 Binance Futures (Crypto)</option>
+                        <option value="BYBIT">🌐 Bybit Perpetual (Crypto)</option>
+                    </select>
+                </div>
+
+                <!-- Searchable Instrument Dropdown -->
+                <div class="relative">
+                    <label class="text-xs text-slate-400 font-semibold block mb-1">Trading Instrument</label>
+                    <div class="relative">
+                        <input type="text" id="cfg-symbol" value="NIFTY" onfocus="openSymbolDropdown()" oninput="filterSymbols()" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white uppercase font-mono font-bold pl-8" placeholder="Search Symbol (e.g. NIFTY, BTC, CRUDE)...">
+                        <i data-lucide="search" class="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-3"></i>
+                    </div>
+
+                    <!-- Dropdown Menu -->
+                    <div id="symbol-dropdown" class="hidden absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-indigo-500/40 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto custom-scrollbar divide-y divide-slate-800">
+                        <!-- Group 1: Indices -->
+                        <div class="p-1">
+                            <span class="text-[10px] uppercase font-bold text-slate-500 px-2 py-1 block">📈 Indian Major Indices</span>
+                            <div onclick="selectInstrument('NIFTY', 'FYERS', 50)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-indigo-300">NIFTY</span>
+                                <span class="text-[10px] text-slate-400">Nifty 50 Index &bull; Lot: 50</span>
+                            </div>
+                            <div onclick="selectInstrument('BANKNIFTY', 'FYERS', 15)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-indigo-300">BANKNIFTY</span>
+                                <span class="text-[10px] text-slate-400">Nifty Bank &bull; Lot: 15</span>
+                            </div>
+                            <div onclick="selectInstrument('FINNIFTY', 'FYERS', 65)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-indigo-300">FINNIFTY</span>
+                                <span class="text-[10px] text-slate-400">Fin Nifty &bull; Lot: 65</span>
+                            </div>
+                            <div onclick="selectInstrument('SENSEX', 'FYERS', 10)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-indigo-300">SENSEX</span>
+                                <span class="text-[10px] text-slate-400">BSE Sensex &bull; Lot: 10</span>
+                            </div>
+                        </div>
+
+                        <!-- Group 2: Bluechip Stocks -->
+                        <div class="p-1">
+                            <span class="text-[10px] uppercase font-bold text-slate-500 px-2 py-1 block">🏢 F&O Bluechip Equities</span>
+                            <div onclick="selectInstrument('RELIANCE', 'FYERS', 250)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-emerald-300">RELIANCE</span>
+                                <span class="text-[10px] text-slate-400">Reliance Industries &bull; Lot: 250</span>
+                            </div>
+                            <div onclick="selectInstrument('HDFCBANK', 'FYERS', 550)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-emerald-300">HDFCBANK</span>
+                                <span class="text-[10px] text-slate-400">HDFC Bank Ltd &bull; Lot: 550</span>
+                            </div>
+                            <div onclick="selectInstrument('TCS', 'FYERS', 175)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-emerald-300">TCS</span>
+                                <span class="text-[10px] text-slate-400">Tata Consultancy &bull; Lot: 175</span>
+                            </div>
+                            <div onclick="selectInstrument('INFY', 'FYERS', 400)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-emerald-300">INFY</span>
+                                <span class="text-[10px] text-slate-400">Infosys Ltd &bull; Lot: 400</span>
+                            </div>
+                            <div onclick="selectInstrument('SBIN', 'FYERS', 750)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-emerald-300">SBIN</span>
+                                <span class="text-[10px] text-slate-400">State Bank of India &bull; Lot: 750</span>
+                            </div>
+                        </div>
+
+                        <!-- Group 3: MCX -->
+                        <div class="p-1">
+                            <span class="text-[10px] uppercase font-bold text-slate-500 px-2 py-1 block">🛢️ MCX Commodities</span>
+                            <div onclick="selectInstrument('CRUDEOIL', 'FYERS', 100)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-amber-300">CRUDEOIL</span>
+                                <span class="text-[10px] text-slate-400">MCX Crude Oil &bull; Lot: 100</span>
+                            </div>
+                            <div onclick="selectInstrument('GOLD', 'FYERS', 100)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-amber-300">GOLD</span>
+                                <span class="text-[10px] text-slate-400">MCX Gold &bull; Lot: 100</span>
+                            </div>
+                            <div onclick="selectInstrument('SILVER', 'FYERS', 30)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-amber-300">SILVER</span>
+                                <span class="text-[10px] text-slate-400">MCX Silver &bull; Lot: 30</span>
+                            </div>
+                            <div onclick="selectInstrument('NATURALGAS', 'FYERS', 1250)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-amber-300">NATURALGAS</span>
+                                <span class="text-[10px] text-slate-400">Natural Gas &bull; Lot: 1250</span>
+                            </div>
+                        </div>
+
+                        <!-- Group 4: Crypto -->
+                        <div class="p-1">
+                            <span class="text-[10px] uppercase font-bold text-slate-500 px-2 py-1 block">🪙 Crypto Perpetuals</span>
+                            <div onclick="selectInstrument('BTCUSDT', 'BINANCE', 1)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-cyan-300">BTCUSDT</span>
+                                <span class="text-[10px] text-slate-400">Bitcoin USDT Perp</span>
+                            </div>
+                            <div onclick="selectInstrument('ETHUSDT', 'BINANCE', 5)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-cyan-300">ETHUSDT</span>
+                                <span class="text-[10px] text-slate-400">Ethereum USDT Perp</span>
+                            </div>
+                            <div onclick="selectInstrument('SOLUSDT', 'BINANCE', 25)" class="px-3 py-1.5 hover:bg-slate-800 rounded cursor-pointer text-xs flex justify-between">
+                                <span class="font-bold text-cyan-300">SOLUSDT</span>
+                                <span class="text-[10px] text-slate-400">Solana USDT Perp</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Timeframe -->
+                <div>
+                    <label class="text-xs text-slate-400 font-semibold block mb-1">Timeframe</label>
+                    <select id="cfg-timeframe" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white">
+                        <option value="1m">1 Minute</option>
+                        <option value="3m">3 Minutes</option>
+                        <option value="5m" selected>5 Minutes (Recommended)</option>
+                        <option value="15m">15 Minutes</option>
+                        <option value="1h">1 Hour</option>
+                    </select>
+                </div>
+
+                <!-- Risk SL & Target -->
+                <div>
+                    <label class="text-xs text-slate-400 font-semibold block mb-1">Risk Rules (SL / Target %)</label>
+                    <div class="flex gap-2">
+                        <input type="number" id="cfg-sl" value="0.8" step="0.1" class="w-1/2 bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-rose-400 font-bold" placeholder="SL %">
+                        <input type="number" id="cfg-tg" value="2.4" step="0.1" class="w-1/2 bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-emerald-400 font-bold" placeholder="TP %">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Backtest Results & Detailed Trade Report Section -->
+            <div id="results-section" class="bg-cardbg border border-bordercolor rounded-2xl p-6 shadow-xl space-y-6">
+                <div class="flex flex-wrap items-center justify-between gap-4 border-b border-bordercolor pb-4">
+                    <div>
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i data-lucide="bar-chart-2" class="h-4 w-4 text-indigo-400"></i> Zero-Lookahead Backtest Engine & Performance Report
+                        </h3>
+                        <p class="text-xs text-slate-400">Realized tick simulation with slippage, brokerage, and exact entry/exit timestamps</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="runBacktest()" id="btn-backtest" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-white flex items-center gap-1.5 transition">
+                            <i data-lucide="play" class="h-3.5 w-3.5 text-emerald-400"></i> Re-Run Backtest
+                        </button>
+                        <button onclick="deployCurrentStrategy()" class="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-xs font-bold text-white shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition">
+                            <i data-lucide="zap" class="h-3.5 w-3.5"></i> 🚀 1-Click Deploy to OpenAlgo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- KPI Metric Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
+                        <span class="text-xs text-slate-400 font-medium">Net Realized P&L</span>
+                        <div id="kpi-pnl" class="text-xl font-bold text-emerald-400 mt-1">₹0.00</div>
+                    </div>
+                    <div class="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
+                        <span class="text-xs text-slate-400 font-medium">Win Rate</span>
+                        <div id="kpi-winrate" class="text-xl font-bold text-white mt-1">0.0%</div>
+                    </div>
+                    <div class="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
+                        <span class="text-xs text-slate-400 font-medium">Profit Factor</span>
+                        <div id="kpi-pf" class="text-xl font-bold text-indigo-400 mt-1">0.0</div>
+                    </div>
+                    <div class="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
+                        <span class="text-xs text-slate-400 font-medium">Total Trades Executed</span>
+                        <div id="kpi-trades" class="text-xl font-bold text-slate-200 mt-1">0</div>
+                    </div>
+                </div>
+
+                <!-- Plotly Equity Curve -->
+                <div class="bg-slate-900/80 border border-slate-800 p-4 rounded-xl">
+                    <div class="text-xs font-semibold text-slate-300 mb-2">Equity Growth Curve (₹)</div>
+                    <div id="equity-chart" class="w-full h-64"></div>
+                </div>
+
+                <!-- Detailed Trade History Table (Exact Date, Time, Buying/Selling Price) -->
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-xs font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="file-spreadsheet" class="h-3.5 w-3.5 text-indigo-400"></i> Detailed Trade History & Execution Report
+                        </h4>
+                        <span class="text-[11px] text-slate-500 font-mono">Date, Time, Buying Price & Selling Price</span>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60 custom-scrollbar max-h-80">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 border-b border-slate-800 uppercase text-[10px] text-slate-400 sticky top-0 bg-slate-900 z-10 font-semibold">
+                                <tr>
+                                    <th class="py-2.5 px-4">#</th>
+                                    <th class="py-2.5 px-4">Action</th>
+                                    <th class="py-2.5 px-4">Entry Date & Time</th>
+                                    <th class="py-2.5 px-4 text-right">Buying Price</th>
+                                    <th class="py-2.5 px-4">Exit Date & Time</th>
+                                    <th class="py-2.5 px-4 text-right">Selling Price</th>
+                                    <th class="py-2.5 px-4 text-right">Gross P&L</th>
+                                    <th class="py-2.5 px-4 text-right">Net Realized P&L</th>
+                                    <th class="py-2.5 px-4">Exit Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody id="backtest-trades-body" class="divide-y divide-slate-800 font-mono">
+                                <tr>
+                                    <td colspan="9" class="py-6 text-center text-slate-500 font-sans">Run a backtest to generate detailed trade logs.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- =================================================================== -->
+        <!-- TAB 2: PYTHON BOT CODE EDITOR & DEPLOYER -->
+        <!-- =================================================================== -->
+        <div id="tab-python-editor" class="hidden space-y-6">
+            <div class="bg-cardbg border border-bordercolor rounded-2xl p-6 shadow-xl space-y-4">
+                <div class="flex items-center justify-between border-b border-bordercolor pb-4">
+                    <div>
+                        <h2 class="text-base font-bold text-white flex items-center gap-2">
+                            <i data-lucide="code" class="h-5 w-5 text-indigo-400"></i> Synthesized Python Algo Script
+                        </h2>
+                        <p class="text-xs text-slate-400">Production-ready script with OpenAlgo REST API hooks</p>
+                    </div>
+                    <button onclick="deployCurrentStrategy()" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-xs font-bold text-white shadow-lg shadow-emerald-500/25 flex items-center gap-1.5 transition">
+                        <i data-lucide="zap" class="h-4 w-4"></i> 🚀 Deploy to OpenAlgo / Fyers
+                    </button>
+                </div>
+
+                <div class="relative">
+                    <textarea id="python-code-area" rows="22" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono text-indigo-200 leading-relaxed focus:outline-none focus:border-indigo-500 transition custom-scrollbar"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- =================================================================== -->
+        <!-- TAB 3: LIVE RUNNING BOTS & REAL-TIME ORDERBOOK -->
+        <!-- =================================================================== -->
+        <div id="tab-live-orderbook" class="hidden space-y-6">
+            
+            <!-- Running Bots Controller -->
+            <div class="bg-cardbg border border-bordercolor rounded-2xl p-6 shadow-xl space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-base font-bold text-white flex items-center gap-2">
+                            <i data-lucide="cpu" class="h-5 w-5 text-emerald-400 animate-pulse"></i> Active Running Bots
+                        </h2>
+                        <p class="text-xs text-slate-400">Daemons continuously monitoring candles and dispatching orders</p>
+                    </div>
+                    <span class="text-xs px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-semibold">Auto-Syncing (3s)</span>
+                </div>
+
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-900 border-b border-slate-800 uppercase text-[10px] text-slate-400 font-semibold">
+                            <tr>
+                                <th class="py-3 px-4">Bot ID</th>
+                                <th class="py-3 px-4">Strategy Name</th>
+                                <th class="py-3 px-4">Symbol</th>
+                                <th class="py-3 px-4">Broker</th>
+                                <th class="py-3 px-4">Start Time</th>
+                                <th class="py-3 px-4">Status</th>
+                                <th class="py-3 px-4 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bots-tbody" class="divide-y divide-slate-800">
+                            <tr>
+                                <td colspan="7" class="py-6 text-center text-slate-500">No active bots running yet. Deploy one from the AI tab!</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Live Orderbook Table -->
+            <div class="bg-cardbg border border-bordercolor rounded-2xl p-6 shadow-xl space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-base font-bold text-white flex items-center gap-2">
+                            <i data-lucide="list-ordered" class="h-5 w-5 text-indigo-400"></i> Real-Time Live Orderbook
+                        </h2>
+                        <p class="text-xs text-slate-400">Live order execution timestamps, buying & selling prices, and net P&L</p>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-900 border-b border-slate-800 uppercase text-[10px] text-slate-400 font-semibold">
+                            <tr>
+                                <th class="py-3 px-4">Order ID</th>
+                                <th class="py-3 px-4">Broker</th>
+                                <th class="py-3 px-4">Symbol</th>
+                                <th class="py-3 px-4">Action</th>
+                                <th class="py-3 px-4">Qty</th>
+                                <th class="py-3 px-4">Entry Time</th>
+                                <th class="py-3 px-4 text-right">Buying Price</th>
+                                <th class="py-3 px-4">Exit Time</th>
+                                <th class="py-3 px-4 text-right">Selling Price</th>
+                                <th class="py-3 px-4 text-right">Realized P&L</th>
+                                <th class="py-3 px-4 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orderbook-tbody" class="divide-y divide-slate-800">
+                            <tr>
+                                <td colspan="11" class="py-6 text-center text-slate-500">Orderbook is clear. Deployed algos will log executions here.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- JavaScript Logic -->
+    <script>
+        function safeIcons() {
+            try {
+                if (typeof lucide !== 'undefined' && lucide && lucide.createIcons) lucide.createIcons();
+            } catch(e) {}
+        }
+        safeIcons();
+
+        function showToast(msg, type = 'success') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            const isSuccess = (type === 'success');
+            const bgClass = isSuccess ? 'bg-emerald-950 border-emerald-500 text-emerald-100' : 'bg-rose-950 border-rose-500 text-rose-100';
+            toast.className = `p-3.5 rounded-xl border-2 shadow-2xl ${bgClass} text-xs font-semibold flex items-center gap-2 pointer-events-auto transition duration-300`;
+            toast.innerHTML = `<span>${isSuccess ? '✅' : '❌'}</span> <div>${msg}</div>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        let currentConfig = {
+            strategy_name: "Antigravity_SMC_Nifty",
+            broker: "FYERS",
+            symbol: "NIFTY",
+            timeframe: "5m",
+            strategy_type: "smc_institutional",
+            stoploss_pct: 0.8,
+            target_pct: 2.4,
+            quantity: 50,
+            capital: 100000.0,
+            trade_direction: "BOTH"
+        };
+
+        function openSymbolDropdown() {
+            document.getElementById('symbol-dropdown').classList.remove('hidden');
+        }
+
+        function closeSymbolDropdown() {
+            setTimeout(() => {
+                document.getElementById('symbol-dropdown').classList.add('hidden');
+            }, 200);
+        }
+
+        document.addEventListener('click', (e) => {
+            const symInput = document.getElementById('cfg-symbol');
+            const symDropdown = document.getElementById('symbol-dropdown');
+            if (symInput && symDropdown && !symInput.contains(e.target) && !symDropdown.contains(e.target)) {
+                symDropdown.classList.add('hidden');
+            }
+        });
+
+        function filterSymbols() {
+            const query = document.getElementById('cfg-symbol').value.toUpperCase();
+            openSymbolDropdown();
+            const items = document.querySelectorAll('#symbol-dropdown div[onclick]');
+            items.forEach(item => {
+                const text = item.innerText.toUpperCase();
+                item.style.display = text.includes(query) ? 'flex' : 'none';
+            });
+        }
+
+        function selectInstrument(sym, broker, qty) {
+            document.getElementById('cfg-symbol').value = sym;
+            document.getElementById('cfg-broker').value = broker;
+            currentConfig.symbol = sym;
+            currentConfig.broker = broker;
+            currentConfig.quantity = qty;
+            document.getElementById('symbol-dropdown').classList.add('hidden');
+            showToast(`Selected ${sym} (${broker}) &bull; Lot: ${qty}`, 'success');
+            runBacktest();
+        }
+
+        function switchTab(tabId) {
+            ['tab-ai-builder', 'tab-python-editor', 'tab-live-orderbook'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
+            ['nav-ai-builder', 'nav-python-editor', 'nav-live-orderbook'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.className = 'px-3.5 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition flex items-center gap-1.5';
+            });
+
+            const activeTab = document.getElementById(tabId);
+            if (activeTab) activeTab.classList.remove('hidden');
+
+            const navMap = {
+                'tab-ai-builder': 'nav-ai-builder',
+                'tab-python-editor': 'nav-python-editor',
+                'tab-live-orderbook': 'nav-live-orderbook'
+            };
+            const activeNav = document.getElementById(navMap[tabId]);
+            if (activeNav) {
+                activeNav.className = 'px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white shadow transition flex items-center gap-1.5';
+            }
+            safeIcons();
+
+            if (tabId === 'tab-live-orderbook') fetchLiveSync();
+        }
+
+        function setPromptPreset(preset) {
+            const promptEl = document.getElementById('ai-prompt');
+            if (preset === 'smc_nifty') {
+                promptEl.value = 'Fyers par Nifty 5m me jab SMC Order Block retest ho aur Bullish CHoCH bane tab Buy karo, Stop Loss 0.8%, Target 2.4% (1:3 RR)';
+            } else if (preset === 'crypto_btc') {
+                promptEl.value = 'Binance par BTCUSDT 5m me SMC Liquidity Sweep aur Breakout par Buy karo, Stop Loss 1.0%, Target 3.0%';
+            } else if (preset === 'supertrend') {
+                promptEl.value = 'Fyers par Nifty 5m me Supertrend 7 period 3 multiplier cross par Buy/Sell karo, Stop Loss 0.8%, Target 2.2%';
+            } else if (preset === 'vwap') {
+                promptEl.value = 'Fyers par BankNifty 5m me VWAP ke upar 20 EMA pullback par Buy karo, Stop Loss 0.6%, Target 1.8%';
+            }
+        }
+
+        async function compileAIPrompt() {
+            const prompt = document.getElementById('ai-prompt').value.trim();
+            if (!prompt) {
+                alert('Please enter a trading prompt.');
+                return;
+            }
+            const btn = document.getElementById('btn-compile');
+            btn.innerHTML = '<div class="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent"></div> Compiling AI...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/ai/parse', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({prompt})
+                });
+                const data = await res.json();
+                btn.innerHTML = '<i data-lucide="sparkles" class="h-4 w-4"></i> 🧠 Compile Algo & Synthesize Code';
+                btn.disabled = false;
+                safeIcons();
+
+                if (data.status === 'success') {
+                    currentConfig = data.config;
+                    document.getElementById('cfg-symbol').value = currentConfig.symbol;
+                    document.getElementById('cfg-broker').value = currentConfig.broker;
+                    document.getElementById('cfg-timeframe').value = currentConfig.timeframe;
+                    document.getElementById('cfg-sl').value = currentConfig.stoploss_pct;
+                    document.getElementById('cfg-tg').value = currentConfig.target_pct;
+                    document.getElementById('python-code-area').value = data.python_code;
+
+                    showToast('🤖 AI Strategy & Python Code Synthesized!', 'success');
+                    runBacktest();
+                }
+            } catch(e) {
+                btn.innerHTML = '<i data-lucide="sparkles" class="h-4 w-4"></i> 🧠 Compile Algo & Synthesize Code';
+                btn.disabled = false;
+                showToast('AI Compile failed: ' + e, 'error');
+            }
+        }
+
+        async function runBacktest() {
+            syncFormToConfig();
+            try {
+                const res = await fetch('/api/backtest/run', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(currentConfig)
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    document.getElementById('kpi-pnl').innerText = '₹' + data.total_net_pnl.toLocaleString();
+                    document.getElementById('kpi-pnl').className = data.total_net_pnl >= 0 ? 'text-xl font-bold text-emerald-400 mt-1' : 'text-xl font-bold text-rose-400 mt-1';
+                    document.getElementById('kpi-winrate').innerText = data.win_rate + '%';
+                    document.getElementById('kpi-pf').innerText = data.profit_factor;
+                    document.getElementById('kpi-trades').innerText = data.total_trades;
+
+                    // Plotly Equity Curve
+                    if (data.equity_curve && typeof Plotly !== 'undefined') {
+                        const x = data.equity_curve.map(e => e.time);
+                        const y = data.equity_curve.map(e => e.equity);
+                        Plotly.newPlot('equity-chart', [{
+                            x: x, y: y, type: 'scatter', mode: 'lines',
+                            line: {color: '#10b981', width: 2.5},
+                            fill: 'tozeroy', fillcolor: 'rgba(16, 185, 129, 0.1)'
+                        }], {
+                            margin: {t: 10, r: 10, l: 50, b: 30},
+                            paper_bgcolor: '#0f172a',
+                            plot_bgcolor: '#0f172a',
+                            font: {color: '#94a3b8'},
+                            xaxis: {gridcolor: '#1e293b'},
+                            yaxis: {gridcolor: '#1e293b', tickprefix: '₹'}
+                        }, {responsive: true});
+                    }
+
+                    // Render Detailed Trade History Table
+                    const tbody = document.getElementById('backtest-trades-body');
+                    if (tbody && data.trades && data.trades.length > 0) {
+                        tbody.innerHTML = '';
+                        data.trades.forEach(t => {
+                            const tr = document.createElement('tr');
+                            tr.className = 'hover:bg-slate-800/40';
+                            tr.innerHTML = `
+                                <td class="py-2 px-4 text-slate-400 font-bold">${t.trade_no}</td>
+                                <td class="py-2 px-4"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${t.action === 'BUY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}">${t.action}</span></td>
+                                <td class="py-2 px-4 text-slate-300 font-sans">${t.entry_time}</td>
+                                <td class="py-2 px-4 text-right text-indigo-300 font-bold">₹${t.entry_price.toLocaleString()}</td>
+                                <td class="py-2 px-4 text-slate-300 font-sans">${t.exit_time}</td>
+                                <td class="py-2 px-4 text-right text-indigo-300 font-bold">₹${t.exit_price.toLocaleString()}</td>
+                                <td class="py-2 px-4 text-right text-slate-400">₹${t.gross_pnl.toLocaleString()}</td>
+                                <td class="py-2 px-4 text-right font-bold ${t.net_pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}">₹${t.net_pnl.toLocaleString()}</td>
+                                <td class="py-2 px-4 text-slate-400 font-sans">${t.exit_reason}</td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                    }
+
+                    showToast(`✅ Backtest Completed! Net P&L: ₹${data.total_net_pnl.toLocaleString()} (${data.win_rate}% Win Rate)`, 'success');
+                }
+            } catch(e) {
+                showToast('Backtest error: ' + e, 'error');
+            }
+        }
+
+        function syncFormToConfig() {
+            currentConfig.symbol = document.getElementById('cfg-symbol').value.toUpperCase();
+            currentConfig.broker = document.getElementById('cfg-broker').value;
+            currentConfig.timeframe = document.getElementById('cfg-timeframe').value;
+            currentConfig.stoploss_pct = parseFloat(document.getElementById('cfg-sl').value) || 0.8;
+            currentConfig.target_pct = parseFloat(document.getElementById('cfg-tg').value) || 2.4;
+        }
+
+        async function deployCurrentStrategy() {
+            syncFormToConfig();
+            try {
+                const res = await fetch('/api/deploy/openalgo', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(currentConfig)
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    showToast(data.message, 'success');
+                    switchTab('tab-live-orderbook');
+                }
+            } catch(e) {
+                showToast('Deployment error: ' + e, 'error');
+            }
+        }
+
+        async function fetchLiveSync() {
+            try {
+                // Fetch Bots
+                const resBots = await fetch('/api/live/bots');
+                const dataBots = await resBots.json();
+                const tbodyBots = document.getElementById('bots-tbody');
+                if (dataBots.status === 'success' && dataBots.bots.length > 0) {
+                    document.getElementById('running-count').innerText = dataBots.bots.filter(b => b.status === 'RUNNING').length;
+                    tbodyBots.innerHTML = '';
+                    dataBots.bots.forEach(b => {
+                        const tr = document.createElement('tr');
+                        tr.className = 'hover:bg-slate-800/40';
+                        tr.innerHTML = `
+                            <td class="py-3 px-4 font-mono text-indigo-400 font-bold">${b.bot_id}</td>
+                            <td class="py-3 px-4 font-semibold text-white">${b.name}</td>
+                            <td class="py-3 px-4 font-mono font-bold">${b.symbol}</td>
+                            <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-semibold">${b.broker}</span></td>
+                            <td class="py-3 px-4 font-sans">${b.start_time}</td>
+                            <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${b.status === 'RUNNING' ? 'bg-emerald-500/20 text-emerald-400 animate-pulse' : 'bg-rose-500/20 text-rose-400'}">${b.status}</span></td>
+                            <td class="py-3 px-4 text-right">
+                                <button onclick="controlBot('${b.bot_id}', '${b.status === 'RUNNING' ? 'PAUSE' : 'RESUME'}')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-semibold mr-1">${b.status === 'RUNNING' ? '⏸️ Pause' : '▶️ Resume'}</button>
+                                <button onclick="controlBot('${b.bot_id}', 'SQUARE_OFF')" class="px-2 py-1 rounded bg-rose-500/20 text-rose-300 hover:bg-rose-600 hover:text-white text-xs font-semibold">🛑 Stop</button>
+                            </td>
+                        `;
+                        tbodyBots.appendChild(tr);
+                    });
+                }
+
+                // Fetch Orderbook
+                const resOrders = await fetch('/api/live/orderbook');
+                const dataOrders = await resOrders.json();
+                const tbodyOrders = document.getElementById('orderbook-tbody');
+                if (dataOrders.status === 'success' && dataOrders.orders.length > 0) {
+                    tbodyOrders.innerHTML = '';
+                    dataOrders.orders.forEach(o => {
+                        const tr = document.createElement('tr');
+                        tr.className = 'hover:bg-slate-800/40';
+                        tr.innerHTML = `
+                            <td class="py-3 px-4 font-mono text-slate-400">${o.order_id}</td>
+                            <td class="py-3 px-4 font-semibold text-indigo-300">${o.broker}</td>
+                            <td class="py-3 px-4 font-mono font-bold text-white">${o.symbol}</td>
+                            <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${o.action === 'BUY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}">${o.action}</span></td>
+                            <td class="py-3 px-4 font-mono">${o.quantity}</td>
+                            <td class="py-3 px-4 font-sans">${o.entry_time}</td>
+                            <td class="py-3 px-4 text-right font-mono font-semibold text-indigo-300">₹${o.entry_price.toLocaleString()}</td>
+                            <td class="py-3 px-4 font-sans">${o.exit_time}</td>
+                            <td class="py-3 px-4 text-right font-mono font-semibold">${o.exit_price !== '-' ? '₹' + Number(o.exit_price).toLocaleString() : '-'}</td>
+                            <td class="py-3 px-4 text-right font-mono font-bold ${o.net_pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}">₹${o.net_pnl.toLocaleString()}</td>
+                            <td class="py-3 px-4 text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400">${o.status}</span></td>
+                        `;
+                        tbodyOrders.appendChild(tr);
+                    });
+                }
+            } catch(e) {}
+        }
+
+        async function controlBot(botId, action) {
+            try {
+                const res = await fetch('/api/live/action', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({bot_id: botId, action: action})
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    showToast(data.message, 'success');
+                    fetchLiveSync();
+                }
+            } catch(e) {
+                showToast('Action failed: ' + e, 'error');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            safeIcons();
+            setPromptPreset('smc_nifty');
+            compileAIPrompt();
+            setInterval(fetchLiveSync, 3000);
+        });
+    </script>
+</body>
+</html>
