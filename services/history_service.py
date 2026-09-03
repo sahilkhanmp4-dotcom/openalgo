@@ -9,17 +9,22 @@ from database.token_db import get_token
 from utils.constants import VALID_EXCHANGES
 from utils.logging import get_logger
 
+import functools
+from cachetools import TTLCache
+
 # Initialize logger
 logger = get_logger(__name__)
 
-# Rate limiter: max 3 broker history API requests per second
-# Uses minimum interval between calls to prevent burst requests
+# Cache historical data for 10 seconds to make multiple chart renders / switching instant
+_history_cache = TTLCache(maxsize=256, ttl=10)
+
+# Rate limiter: optimized pacing between calls
 _last_history_call: float = 0.0
-_MIN_HISTORY_INTERVAL = 0.35  # 350ms between calls (~3 req/sec, evenly spaced)
+_MIN_HISTORY_INTERVAL = 0.15  # 150ms between uncached calls
 
 
 def _enforce_rate_limit():
-    """Block until enough time has passed since the last request (~3 per second)."""
+    """Block until enough time has passed since the last request."""
     global _last_history_call
     now = time.monotonic()
     elapsed = now - _last_history_call
@@ -55,9 +60,10 @@ def validate_symbol_exchange(symbol: str, exchange: str) -> tuple[bool, str | No
     return True, None
 
 
+@functools.lru_cache(maxsize=64)
 def import_broker_module(broker_name: str) -> Any | None:
     """
-    Dynamically import the broker-specific data module.
+    Dynamically import the broker-specific data module (cached for zero-overhead).
 
     Args:
         broker_name: Name of the broker
@@ -72,6 +78,7 @@ def import_broker_module(broker_name: str) -> Any | None:
     except ImportError as error:
         logger.error(f"Error importing broker module '{module_path}': {error}")
         return None
+
 
 
 def get_history_with_auth(
@@ -108,6 +115,12 @@ def get_history_with_auth(
     if not is_valid:
         return False, {"status": "error", "message": error_msg}, 400
 
+    # Check cache first for instant sub-millisecond chart loading
+    cache_key = f"{broker}_{exchange}_{symbol}_{interval}_{start_date}_{end_date}"
+    cached_data = _history_cache.get(cache_key)
+    if cached_data is not None:
+        return True, {"status": "success", "data": cached_data}, 200
+
     broker_module = import_broker_module(broker)
     if broker_module is None:
         return False, {"status": "error", "message": "Broker-specific module not found"}, 404
@@ -135,7 +148,11 @@ def get_history_with_auth(
         if "oi" not in df.columns:
             df["oi"] = 0
 
-        return True, {"status": "success", "data": df.to_dict(orient="records")}, 200
+        records = df.to_dict(orient="records")
+        _history_cache[cache_key] = records
+
+        return True, {"status": "success", "data": records}, 200
+
     except Exception as e:
         logger.exception(f"Error in broker_module.get_history: {e}")
         return False, {"status": "error", "message": str(e)}, 500

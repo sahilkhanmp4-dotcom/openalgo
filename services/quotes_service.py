@@ -75,9 +75,13 @@ def validate_symbols_bulk(
     return all_valid, validated, first_error
 
 
+import functools
+
+
+@functools.lru_cache(maxsize=64)
 def import_broker_module(broker_name: str) -> Any | None:
     """
-    Dynamically import the broker-specific data module.
+    Dynamically import the broker-specific data module (cached for fast quotes).
 
     Args:
         broker_name: Name of the broker
@@ -92,6 +96,7 @@ def import_broker_module(broker_name: str) -> Any | None:
     except ImportError as error:
         logger.error(f"Error importing broker module '{module_path}': {error}")
         return None
+
 
 
 def get_quotes_with_auth(

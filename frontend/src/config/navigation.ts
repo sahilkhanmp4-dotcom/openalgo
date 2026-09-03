@@ -37,7 +37,7 @@ export interface NavItem {
 // Main navigation items shown in desktop navbar
 export const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: 'http://127.0.0.1:8888', label: '⚡ Antigravity AI', icon: Zap, external: true },
+  { href: '/algotest', label: 'AlgoTest', icon: Layers },
   { href: '/orderbook', label: 'Orderbook', icon: ClipboardList },
   { href: '/tradebook', label: 'Tradebook', icon: FileText },
   { href: '/positions', label: 'Positions', icon: TrendingUp },
@@ -65,7 +65,6 @@ export const mobileSheetItems = navItems.filter((item) => !bottomNavPaths.includ
 
 // Profile dropdown menu items
 export const profileMenuItems: NavItem[] = [
-  { href: 'http://127.0.0.1:8888', label: '⚡ Antigravity AI Studio', icon: Zap, external: true },
   { href: '/profile', label: 'Profile', icon: User },
   { href: '/apikey', label: 'API Key', icon: Key },
   { href: '/action-center', label: 'Action Center', icon: Bell },

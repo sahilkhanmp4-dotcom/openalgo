@@ -7,6 +7,7 @@ import threading
 import time
 from typing import Dict, Any, List
 from database.bracket_db import get_active_brackets, update_bracket_status, save_or_update_bracket
+from database.auth_db import get_auth_token, get_first_available_api_key, get_auth_token_broker
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -41,34 +42,42 @@ class BracketManager:
             try:
                 active_brackets = get_active_brackets()
                 if active_brackets:
-                    from database.auth_db import get_auth_token, get_api_key_for_tradingview
-                    from database.settings_db import get_analyze_mode
                     from services.quotes_service import get_quotes
+                    api_key = get_first_available_api_key()
                     
-                    symbols = list({b["symbol"] for b in active_brackets if b.get("symbol")})
-                    if symbols:
-                        for b in active_brackets:
-                            sym = b.get("symbol")
-                            exch = b.get("exchange", "NSE")
-                            try:
-                                # Fetch live quote / LTP
-                                success, res, _ = get_quotes(symbols=[sym], exchange=exch)
-                                if success and res and "data" in res:
-                                    quote_list = res.get("data", [])
-                                    if quote_list and len(quote_list) > 0:
-                                        ltp = float(quote_list[0].get("ltp") or quote_list[0].get("last_price") or 0)
-                                        if ltp > 0:
-                                            self.process_ltp_tick(sym, ltp)
-                            except Exception as ex:
-                                pass
+                    for b in active_brackets:
+                        sym = b.get("symbol")
+                        exch = b.get("exchange", "NSE")
+                        if not sym:
+                            continue
+                        try:
+                            # Fetch live quote / LTP using valid api_key
+                            success, res, _ = get_quotes(symbol=sym, exchange=exch, api_key=api_key)
+                            if success and res and "data" in res:
+                                quote_data = res.get("data")
+                                ltp = 0.0
+                                if isinstance(quote_data, dict):
+                                    ltp = float(quote_data.get("ltp") or quote_data.get("last_price") or quote_data.get("lp") or 0.0)
+                                elif isinstance(quote_data, list) and len(quote_data) > 0:
+                                    first = quote_data[0]
+                                    if isinstance(first, dict):
+                                        ltp = float(first.get("ltp") or first.get("last_price") or first.get("lp") or 0.0)
+                                
+                                if ltp > 0:
+                                    self.process_ltp_tick(sym, ltp, api_key=api_key)
+                        except Exception as ex:
+                            logger.debug(f"[BRACKET MONITOR] Error fetching quote for {sym}: {ex}")
             except Exception as e:
                 logger.error(f"[BRACKET MONITOR ERROR] {e}")
-            time.sleep(1.5)
+            time.sleep(1.0)
 
     def process_ltp_tick(self, symbol: str, ltp: float, api_key: str = None, auth_token: str = None, broker: str = None):
         """
         Evaluates LTP tick against active bracket orders and executes Stop Loss / Target immediately.
         """
+        if not api_key:
+            api_key = get_first_available_api_key()
+            
         active_brackets = get_active_brackets()
         for b in active_brackets:
             if b["symbol"].upper() == symbol.upper():
@@ -102,14 +111,14 @@ class BracketManager:
                 
                 # Check Stop Loss & Target
                 if pos == "BUY":
-                    if ltp <= sl:
+                    if sl > 0 and ltp <= sl:
                         exit_triggered = True
                         reason = f"SL_TRIGGERED (LTP {ltp} <= SL {sl})"
                     elif tg > 0 and ltp >= tg:
                         exit_triggered = True
                         reason = f"TG_TRIGGERED (LTP {ltp} >= Target {tg})"
                 elif pos == "SELL":
-                    if ltp >= sl:
+                    if sl > 0 and ltp >= sl:
                         exit_triggered = True
                         reason = f"SL_TRIGGERED (LTP {ltp} >= SL {sl})"
                     elif tg > 0 and ltp <= tg:
@@ -120,12 +129,15 @@ class BracketManager:
                     logger.info(f"[BRACKET TRIGGERED] {symbol} {reason}. Executing OCO Close...")
                     status_name = "SL_TRIGGERED" if "SL" in reason else "TG_TRIGGERED"
                     update_bracket_status(b_id, status_name)
-                    self._execute_close(b, reason, api_key, auth_token, broker)
+                    self._execute_close(b, reason, api_key=api_key, auth_token=auth_token, broker=broker)
 
     def _execute_close(self, bracket: Dict[str, Any], reason: str, api_key: str = None, auth_token: str = None, broker: str = None):
         """Execute position close in live broker or analyze mode."""
         try:
             from services.place_smart_order_service import place_smart_order
+            if not api_key:
+                api_key = get_first_available_api_key()
+
             order_data = {
                 "strategy": f"Bracket {reason}",
                 "exchange": bracket["exchange"],
@@ -133,12 +145,13 @@ class BracketManager:
                 "action": "SELL" if bracket["position_type"].upper() == "BUY" else "BUY",
                 "product_type": bracket["product"],
                 "pricetype": "MARKET",
-                "quantity": "0",
+                "quantity": str(bracket.get("quantity") or 0),
                 "position_size": "0" # Close position
             }
             if api_key:
                 place_smart_order(order_data=order_data, api_key=api_key)
             else:
-                logger.info(f"[BRACKET CLOSE] Direct live close for {bracket['symbol']}")
+                logger.warning(f"[BRACKET CLOSE WARNING] No active API key found to execute close for {bracket['symbol']}")
         except Exception as e:
             logger.error(f"Error executing bracket close order: {e}")
+

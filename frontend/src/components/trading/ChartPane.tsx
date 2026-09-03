@@ -2,7 +2,7 @@
 // toolbar buttons carry no caret: a chevron on every control is dead
 // weight when the whole row opens menus, and it reads as a dated form
 // control. Reserve the glyph for where it distinguishes something.
-import { ChevronDown, RefreshCw, Search, Settings } from 'lucide-react'
+import { ChevronDown, RefreshCw, Search, Settings, Bookmark, FileCode } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -198,6 +198,7 @@ interface Props {
    * than to a pane, so the page passes it in, and passes it to one pane only.
    */
   layoutPicker?: React.ReactNode
+  onToggleStrategy?: () => void
 }
 
 /**
@@ -218,6 +219,7 @@ export function ChartPane({
   onToggleRail,
   railVisible,
   layoutPicker,
+  onToggleStrategy,
 }: Props) {
   const chartRef = useRef<HTMLDivElement>(null)
   const legendRef = useRef<HTMLDivElement>(null)
@@ -345,6 +347,8 @@ export function ChartPane({
       noteHistory(stats0)
       setGrid(terminal.gridState())
       setVolumeOn(terminal.volumeVisible())
+      // Auto-register terminal on mount so watchlist/tools always have an active chart target
+      onFocusPane?.(terminal)
     }
 
     return () => {
@@ -647,6 +651,94 @@ export function ChartPane({
           <ReplayIcon className="h-4 w-4" />
           <span className="hidden sm:inline">Replay</span>
         </Button>
+
+        {/* Indicator Template Save / Restore */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 gap-1"
+              title="Indicator Templates"
+            >
+              <Bookmark className="h-3.5 w-3.5 text-primary" />
+              <span className="hidden sm:inline">Template</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent container={menuHost} align="start" className="w-48">
+            <DropdownMenuItem
+              onSelect={() => {
+                if (!indicators.length) {
+                  showToast.info('No indicators currently on chart to save.')
+                  return
+                }
+                const name = prompt('Enter a name for this Indicator Template:', 'My Setup')
+                if (!name) return
+                try {
+                  const saved = JSON.parse(localStorage.getItem('oa-indicator-templates') || '{}')
+                  saved[name] = indicators
+                  localStorage.setItem('oa-indicator-templates', JSON.stringify(saved))
+                  showToast.success(`Template "${name}" saved!`)
+                } catch {
+                  showToast.error('Could not save template.')
+                }
+              }}
+              className="gap-2 text-xs font-semibold"
+            >
+              💾 Save Current Template...
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {(() => {
+              try {
+                const saved = JSON.parse(localStorage.getItem('oa-indicator-templates') || '{}')
+                const keys = Object.keys(saved)
+                if (!keys.length) {
+                  return (
+                    <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                      No saved templates
+                    </div>
+                  )
+                }
+                return keys.map((k) => (
+                  <DropdownMenuItem
+                    key={k}
+                    onSelect={() => {
+                      const list = saved[k]
+                      if (Array.isArray(list)) {
+                        list.forEach((ind: { id: string }) => {
+                          void terminalRef.current?.addIndicatorById(ind.id)
+                        })
+                        showToast.success(`Template "${k}" applied!`)
+                      }
+                    }}
+                    className="flex justify-between text-xs"
+                  >
+                    <span>{k}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {saved[k]?.length} ind
+                    </span>
+                  </DropdownMenuItem>
+                ))
+              } catch {
+                return null
+              }
+            })()}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Python Strategy Editor / Tester Button */}
+        {onToggleStrategy && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 shrink-0 gap-1 font-medium text-emerald-600 dark:text-emerald-400"
+            title="Python Strategy Editor & Backtester"
+            onClick={onToggleStrategy}
+          >
+            <FileCode className="h-3.5 w-3.5 text-emerald-500" />
+            <span className="hidden sm:inline">Python Strategy</span>
+          </Button>
+        )}
 
         {/* Undo / redo for drawings. Also on the drawing rail, and deliberately
             here as well: the rail can be hidden, and these two are reached far

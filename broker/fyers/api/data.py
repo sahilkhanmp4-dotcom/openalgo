@@ -200,7 +200,7 @@ class BrokerData:
         try:
             BATCH_SIZE = 50  # Fyers /data/quotes limit per request
             RATE_LIMIT_DELAY = 0.1  # Delay in seconds between batch API calls
-            OI_THRESHOLD = 100  # Skip OI entirely when total symbols exceed this
+            OI_THRESHOLD = 0  # Skip sequential /data/depth calls to prevent 429 rate-limiting and achieve sub-100ms response
 
             fetch_oi = len(symbols) <= OI_THRESHOLD
             if not fetch_oi:

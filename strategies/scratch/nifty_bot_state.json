@@ -1,0 +1,14 @@
+{
+  "trade_date": "2026-09-03",
+  "entered_today": false,
+  "ce_symbol": null,
+  "pe_symbol": null,
+  "ce_entry_price": 0.0,
+  "pe_entry_price": 0.0,
+  "ce_sl_price": 0.0,
+  "pe_sl_price": 0.0,
+  "combined_entry": 0.0,
+  "combined_sl": 0.0,
+  "ce_active": false,
+  "pe_active": false
+}

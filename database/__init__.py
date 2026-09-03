@@ -43,7 +43,7 @@ from sqlalchemy.engine import Engine
 
 @event.listens_for(Engine, "connect")
 def _set_sqlite_pragmas(dbapi_connection, connection_record):
-    """Apply WAL + synchronous=NORMAL + busy_timeout to every SQLite connection."""
+    """Apply WAL + synchronous=NORMAL + busy_timeout + memory caching to every SQLite connection."""
     if not isinstance(dbapi_connection, sqlite3.Connection):
         return
     cursor = dbapi_connection.cursor()
@@ -63,5 +63,21 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
             cursor.execute("PRAGMA busy_timeout=15000")
         except sqlite3.OperationalError:
             pass
+        try:
+            # 64MB memory-mapped I/O for lightning fast reads
+            cursor.execute("PRAGMA mmap_size=67108864")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            # 32MB page cache in RAM (-32000 = 32MB)
+            cursor.execute("PRAGMA cache_size=-32000")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            # Store temporary tables and indexes directly in RAM
+            cursor.execute("PRAGMA temp_store=MEMORY")
+        except sqlite3.OperationalError:
+            pass
     finally:
         cursor.close()
+

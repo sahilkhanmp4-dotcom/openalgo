@@ -1,0 +1,51 @@
+[
+  {
+    "id": "strat_920_straddle",
+    "name": "9:20 Short Straddle with Trailing SL",
+    "underlying": "NIFTY",
+    "strategy_type": "INTRADAY",
+    "entry_time": "09:20",
+    "exit_time": "15:15",
+    "overall_sl": 3000,
+    "overall_target": 6000,
+    "mtm_trail_when": 2000,
+    "mtm_trail_by": 1000,
+    "legs": [
+      {
+        "id": "leg_1",
+        "position_type": "SELL",
+        "option_type": "CE",
+        "expiry": "CURRENT_WEEK",
+        "lots": 1,
+        "strike_selection": "ATM",
+        "sl_type": "PERCENTAGE",
+        "sl_value": 25,
+        "target_type": "PERCENTAGE",
+        "target_value": 80,
+        "trailing_sl": true,
+        "trail_when": 10,
+        "trail_by": 5,
+        "re_entry_type": "RE_ENTRY_SL",
+        "re_entry_count": 1
+      },
+      {
+        "id": "leg_2",
+        "position_type": "SELL",
+        "option_type": "PE",
+        "expiry": "CURRENT_WEEK",
+        "lots": 1,
+        "strike_selection": "ATM",
+        "sl_type": "PERCENTAGE",
+        "sl_value": 25,
+        "target_type": "PERCENTAGE",
+        "target_value": 80,
+        "trailing_sl": true,
+        "trail_when": 10,
+        "trail_by": 5,
+        "re_entry_type": "RE_ENTRY_SL",
+        "re_entry_count": 1
+      }
+    ],
+    "created_at": "2026-09-02 13:53:17"
+  }
+]

@@ -1,10 +1,12 @@
-import { LayoutGrid, Link2 as LinkIcon } from 'lucide-react'
+import { LayoutGrid, Link2 as LinkIcon, Code2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navbar } from '@/components/layout/Navbar'
 import { createLinkGroup, type LinkGroup } from 'openalgo-charts'
 import { TickBox } from '@/components/trading/TickBox'
 import { ChartPane } from '@/components/trading/ChartPane'
 import { DrawingRail } from '@/components/trading/DrawingRail'
+import { WatchlistPanel } from '@/components/trading/WatchlistPanel'
+import { StrategyBacktestPanel } from '@/components/trading/StrategyBacktestPanel'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -12,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import type { DrawStats, TradingTerminal } from '@/lib/trading/terminal'
+import type { DrawStats, SearchRow, TradingTerminal } from '@/lib/trading/terminal'
 import { cn } from '@/lib/utils'
 
 const NO_DRAW: DrawStats = {
@@ -170,6 +172,10 @@ export default function Trading() {
   const [tool, setTool] = useState<string | null>(null)
   const [magnet, setMagnet] = useState(false)
   const [showRail, setShowRail] = useState(true)
+  const [showWatchlist, setShowWatchlist] = useState(() => {
+    return localStorage.getItem('oa-show-watchlist') !== '0'
+  })
+  const [showStrategyEditor, setShowStrategyEditor] = useState(false)
   const [stats, setStats] = useState<DrawStats>(NO_DRAW)
   // Undo / delete act on the pane you last drew in; arming a tool hits them all,
   // so whichever pane you click next is the one that gets the shape.
@@ -179,6 +185,24 @@ export default function Trading() {
     activeRef.current = t
     if (t) setStats(t.drawStats())
   }, [])
+
+  const searchSymbols = useCallback(async (q: string, ex?: string, limit = 20): Promise<SearchRow[]> => {
+    if (activeRef.current) {
+      return activeRef.current.search(q, ex, limit)
+    }
+    if (!apiKey) return []
+    try {
+      const res = await fetch('/api/v1/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apikey: apiKey, query: q, ...(ex ? { exchange: ex } : {}) }),
+      })
+      const j = await res.json()
+      return (j.data || []).slice(0, limit)
+    } catch {
+      return []
+    }
+  }, [apiKey])
   const railStats: DrawStats = { ...stats, tool, magnet }
   /**
    * Hand a key event to the focused pane; it reports whether a tool claimed it.
@@ -411,6 +435,7 @@ export default function Trading() {
                   onToggleRail={() => setShowRail((v) => !v)}
                   railVisible={showRail}
                   linkGroup={linkRef.current}
+                  onToggleStrategy={() => setShowStrategyEditor((v) => !v)}
                   layoutPicker={
                     i === 0 ? (
                       <>
@@ -428,7 +453,47 @@ export default function Trading() {
             </div>
           )}
           </div>
+          {/* Right side Watchlist (TradingView style) */}
+          {apiKey && wsUrl && (
+            <WatchlistPanel
+              activeTerminal={activeRef.current}
+              searchFn={searchSymbols}
+              open={showWatchlist}
+              onToggle={() => {
+                setShowWatchlist((prev) => {
+                  const next = !prev
+                  localStorage.setItem('oa-show-watchlist', next ? '1' : '0')
+                  return next
+                })
+              }}
+            />
+          )}
         </main>
+
+        {/* Bottom TradingView-style Strategy / Python Editor Dock Toggle */}
+        <div className="flex h-7 items-center justify-between border-t bg-muted/60 px-3 text-xs">
+          <button
+            type="button"
+            onClick={() => setShowStrategyEditor((v) => !v)}
+            className={cn(
+              'flex items-center gap-1.5 rounded px-2 py-0.5 font-medium transition-colors hover:bg-accent',
+              showStrategyEditor ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
+            )}
+          >
+            <Code2 className="h-3.5 w-3.5" />
+            <span>Python Strategy Editor & Backtester</span>
+          </button>
+          <div className="text-[10px] text-muted-foreground">
+            TradingView-style Strategy Engine
+          </div>
+        </div>
+
+        {/* Bottom Python Strategy & Backtester Panel */}
+        <StrategyBacktestPanel
+          open={showStrategyEditor}
+          onClose={() => setShowStrategyEditor(false)}
+          activeTerminal={activeRef.current}
+        />
       </div>
     </>
   )

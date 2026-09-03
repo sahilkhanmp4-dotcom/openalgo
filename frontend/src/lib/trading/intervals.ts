@@ -4,20 +4,21 @@
  * broker's supported intervals for the timeframe dropdown.
  */
 
-/** History lookback (days) for an interval token — deeper for coarser frames. */
+/** History lookback (days) for an interval token — optimized for 1-second instant chart rendering. */
 export function lookbackDays(interval: string): number {
   const m = /^(\d+)([smh])$/.exec(interval)
   if (m) {
     const n = Number(m[1])
     if (m[2] === 's') return 2
-    if (m[2] === 'm') return n <= 1 ? 7 : n <= 5 ? 30 : n <= 15 ? 60 : 120
-    return 180 // hours
+    if (m[2] === 'm') return n <= 1 ? 3 : n <= 5 ? 10 : n <= 15 ? 30 : 60
+    return 180 // hours (~6 months)
   }
-  if (interval === 'D') return 3 * 365
-  if (interval === 'W') return 5 * 365
-  if (interval === 'M') return 10 * 365
+  if (interval === 'D') return 365 // 1 year
+  if (interval === 'W') return 3 * 365
+  if (interval === 'M') return 5 * 365
   return 30
 }
+
 
 /** Interval token → seconds for the live CandleBuilder; null for D/W/M (no intraday aggregation). */
 export function intervalSeconds(interval: string): number | null {

@@ -411,6 +411,7 @@ export class TradingTerminal {
   private ltpLine: PriceLine | null = null
   private posLine: PriceLine | null = null
   private tradeBtns: BuySellButtonsInstance | null = null
+  private backtestLines: PriceLine[] = []
   /** The bar the OHLC readout is currently showing; replayed into the export. */
   private legendBar: Bar | null = null
   /**
@@ -445,6 +446,9 @@ export class TradingTerminal {
   private offLtp: (() => void) | null = null
   private offDepth: (() => void) | null = null
   private depthActive = false
+  private rafTickId: number | null = null
+  private pendingTickBar: Bar | null = null
+  private onDblClickBound: ((e: MouseEvent) => void) | null = null
 
   private rawBars: Bar[] = []
   /**
@@ -1112,6 +1116,28 @@ export class TradingTerminal {
     this.chart.on('paneRemoved', () => this.placeWatermark())
     // Scrolling back past the loaded range pages in older bars.
     this.chart.setHistoryLoader(() => void this.loadOlderHistory())
+
+    // Double-click custom reset: prevent canvas auto-reset from zooming out to full history
+    if (this.onDblClickBound) {
+      this.container.removeEventListener('dblclick', this.onDblClickBound, true)
+    }
+    this.onDblClickBound = (e: MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!this.chart || !this.shownCount) return
+      const count = this.shownCount
+      const to = count - 1 + 4
+      const from = Math.max(0, to - VISIBLE_BARS)
+      try {
+        this.chart.timeScale.setVisibleLogicalRange({ from, to })
+        this.chart.panes().forEach((pane) => {
+          pane.priceScale?.setOptions?.({ autoScale: true })
+        })
+      } catch {
+        /* ignore */
+      }
+    }
+    this.container.addEventListener('dblclick', this.onDblClickBound, true)
   }
 
   /**
@@ -1935,7 +1961,7 @@ export class TradingTerminal {
   /* ── WS-down fallback: poll quotes so LTP + the forming candle stay live ─ */
   private startLtpFallback() {
     if (this.ltpPollTimer) return
-    this.ltpPollTimer = setInterval(async () => {
+    const pollQuote = async () => {
       if (!this.sym) return
       try {
         const j = await this.api<{ data?: { ltp?: number; bid?: number; ask?: number } }>(
@@ -1962,7 +1988,9 @@ export class TradingTerminal {
       } catch {
         /* next cycle */
       }
-    }, 4000)
+    }
+    void pollQuote()
+    this.ltpPollTimer = setInterval(pollQuote, 1000)
   }
   private stopLtpFallback() {
     if (this.ltpPollTimer) {
@@ -1970,6 +1998,7 @@ export class TradingTerminal {
       this.ltpPollTimer = null
     }
   }
+
 
   /**
    * Colour for the last-price line: the direction of the bar it sits in, so it
@@ -1996,13 +2025,30 @@ export class TradingTerminal {
       const u = this.builder.onTick({ time: e.timeSec || nowSec(), price: e.ltp, ltq: e.ltq })
       if (u) {
         this.liveBucket = u.bar.time
-        // Key the upsert on time rather than the builder's isNew flag, so a
-        // builder that ever disagrees with rawBars about the current bucket
-        // overwrites that bar instead of appending a duplicate of it.
         const last = this.rawBars[this.rawBars.length - 1]
-        if (last && last.time === u.bar.time) this.rawBars[this.rawBars.length - 1] = u.bar
-        else this.rawBars.push(u.bar)
-        this.setPriceData()
+        const isNewBar = !last || last.time !== u.bar.time
+        if (!isNewBar) {
+          this.rawBars[this.rawBars.length - 1] = u.bar
+        } else {
+          this.rawBars.push(u.bar)
+        }
+
+        // Efficient rAF batching: avoid synchronous full array churn on high-frequency sub-millisecond ticks
+        if (isNewBar) {
+          // Immediately flush on new candle creation to prevent lag
+          if (this.rafTickId !== null) {
+            cancelAnimationFrame(this.rafTickId)
+            this.rafTickId = null
+          }
+          this.setPriceData()
+        } else {
+          if (this.rafTickId === null) {
+            this.rafTickId = requestAnimationFrame(() => {
+              this.rafTickId = null
+              this.setPriceData()
+            })
+          }
+        }
       }
     }
     this.setLegend(this.rawBars.length ? this.rawBars[this.rawBars.length - 1] : null)
@@ -2239,7 +2285,134 @@ export class TradingTerminal {
   }
 
   resetScale() {
-    this.chart?.resetScale()
+    if (!this.chart || !this.shownCount) {
+      this.chart?.resetScale()
+      return
+    }
+    const count = this.shownCount
+    const to = count - 1 + 4
+    const from = Math.max(0, to - VISIBLE_BARS)
+    try {
+      this.chart.timeScale.setVisibleLogicalRange({ from, to })
+      this.chart.panes().forEach((pane) => {
+        pane.priceScale?.setOptions?.({ autoScale: true })
+      })
+    } catch {
+      this.chart.resetScale()
+    }
+  }
+
+  /* ── on-chart strategy backtest signal plotting (Buy/Sell, Target, Stop Loss) ── */
+  getChartData() {
+    return {
+      bars: [...this.shownBars],
+      symbol: this.sym ? { ...this.sym } : null,
+      interval: this.interval,
+    }
+  }
+
+  private strategyIndicatorInstance: any = null
+
+  clearBacktestSignals() {
+    if (this.strategyIndicatorInstance && this.chart) {
+      try {
+        this.chart.removeIndicator(this.strategyIndicatorInstance.id)
+      } catch {
+        /* ignore */
+      }
+      this.strategyIndicatorInstance = null
+    }
+    if (this.backtestMarkersApi) {
+      try {
+        this.backtestMarkersApi.setMarkers([])
+      } catch {
+        /* ignore */
+      }
+    }
+    if (this.chart) {
+      for (const line of this.backtestLines) {
+        try {
+          this.chart.removePrimitive(line)
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    this.backtestLines = []
+  }
+
+  async plotBacktestSignals(
+    signals: {
+      type: 'BUY' | 'SELL' | 'TARGET' | 'STOPLOSS'
+      time: number
+      price: number
+      label?: string
+      tradeNo?: number
+    }[]
+  ) {
+    if (!this.chart || !this.price) return
+    this.clearBacktestSignals()
+
+    const markers: any[] = []
+    signals.forEach((sig) => {
+      if (sig.type === 'BUY') {
+        markers.push({
+          time: sig.time,
+          position: 'belowBar',
+          color: '#2563eb', // Clean TradingView Blue
+          shape: 'arrowUp',
+          text: `BUY ▲\n+1`,
+          size: 2,
+        })
+      } else if (sig.type === 'SELL') {
+        markers.push({
+          time: sig.time,
+          position: 'aboveBar',
+          color: '#7c3aed', // Purple/Red Exit
+          shape: 'arrowDown',
+          text: `-1\nTrail Exit ▼`,
+          size: 2,
+        })
+      } else if (sig.type === 'TARGET') {
+        markers.push({
+          time: sig.time,
+          position: 'aboveBar',
+          color: '#eab308', // Yellow Diamond Mark High
+          shape: 'diamond',
+          text: `BRK\nMark High`,
+          size: 2,
+        })
+      } else if (sig.type === 'STOPLOSS') {
+        markers.push({
+          time: sig.time,
+          position: 'belowBar',
+          color: '#f97316', // Orange Circle Retest
+          shape: 'circle',
+          text: `RETEST ✓`,
+          size: 2,
+        })
+      }
+    })
+
+    // Create marker primitive on the price series
+    try {
+      if (!this.backtestMarkersApi && this.price) {
+        this.backtestMarkersApi = (this.price as any).createMarkers?.()
+      }
+      if (this.backtestMarkersApi) {
+        this.backtestMarkersApi.setMarkers(markers)
+      }
+    } catch {
+      /* ignore */
+    }
+
+    // Force canvas refresh
+    try {
+      this.chart.timeScale.scrollPosition()
+      this.setPriceData(true)
+    } catch {
+      /* ignore */
+    }
   }
 
   /* ── PNG export ───────────────────────────────────────────────────────── */
@@ -2505,6 +2678,14 @@ export class TradingTerminal {
       this.stopReplay() // release the controller before its chart disappears
     } catch {
       /* nothing to leave */
+    }
+    if (this.onDblClickBound) {
+      this.container.removeEventListener('dblclick', this.onDblClickBound, true)
+      this.onDblClickBound = null
+    }
+    if (this.rafTickId !== null) {
+      cancelAnimationFrame(this.rafTickId)
+      this.rafTickId = null
     }
     try {
       this.chart?.destroy()

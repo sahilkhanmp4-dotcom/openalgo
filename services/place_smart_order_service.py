@@ -72,9 +72,13 @@ def emit_analyzer_error(request_data: dict[str, Any], error_message: str) -> dic
     return error_response
 
 
+import functools
+
+
+@functools.lru_cache(maxsize=64)
 def import_broker_module(broker_name: str) -> Any | None:
     """
-    Dynamically import the broker-specific order API module.
+    Dynamically import the broker-specific order API module (cached for zero-overhead order execution).
 
     Args:
         broker_name: Name of the broker
@@ -89,6 +93,7 @@ def import_broker_module(broker_name: str) -> Any | None:
     except ImportError as error:
         logger.error(f"Error importing broker module '{module_path}': {error}")
         return None
+
 
 
 def validate_smart_order(order_data: dict[str, Any]) -> tuple[bool, str | None]:

@@ -48,6 +48,7 @@ from flask import Flask, session
 from flask_wtf.csrf import CSRFProtect  # Import CSRF protection
 
 from blueprints.admin import admin_bp  # Import the admin blueprint
+from blueprints.algotest import algotest_bp  # Import AlgoTest blueprint
 from blueprints.analyzer import analyzer_bp  # Import the analyzer blueprint
 from blueprints.apikey import api_key_bp
 from blueprints.arbitrage import arbitrage_bp  # Import the Arbitrage blueprint
@@ -325,6 +326,7 @@ def create_app():
     app.register_blueprint(playground_bp)  # Register API playground blueprint
     app.register_blueprint(logging_bp)  # Register Logging blueprint
     app.register_blueprint(admin_bp)  # Register Admin blueprint
+    app.register_blueprint(algotest_bp)  # Register AlgoTest blueprint
     app.register_blueprint(historify_bp)  # Register Historify blueprint
     app.register_blueprint(ivchart_bp)  # Register IV chart blueprint
     app.register_blueprint(scalping_bp)  # Register Scalping terminal blueprint
@@ -453,6 +455,7 @@ def create_app():
 
     # Exempt webhook endpoints from CSRF protection after app initialization
     with app.app_context():
+        csrf.exempt(algotest_bp)
         # Exempt webhook endpoints from CSRF protection
         csrf.exempt(app.view_functions["chartink_bp.webhook"])
         csrf.exempt(app.view_functions["strategy_bp.webhook"])

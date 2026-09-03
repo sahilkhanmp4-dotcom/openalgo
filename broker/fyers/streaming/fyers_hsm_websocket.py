@@ -806,7 +806,7 @@ class FyersHSMWebSocket:
         # Send authentication message
         auth_msg = self._create_auth_message()
         ws.send(auth_msg, opcode=websocket.ABNF.OPCODE_BINARY)
-        # self.logger.info(f"Sent HSM authentication ({len(auth_msg)} bytes)")
+        self.logger.info(f"Sent HSM authentication ({len(auth_msg)} bytes, hsm_key_len={len(self.hsm_key) if self.hsm_key else 0})")
 
     def _on_ws_message(self, ws, message):
         """Handle WebSocket message event"""
@@ -814,9 +814,11 @@ class FyersHSMWebSocket:
         self._last_message_time = time.time()
 
         if isinstance(message, bytes):
+            self.logger.info(f"Received binary HSM message: {len(message)} bytes, first 4 bytes: {list(message[:4])}")
             self._parse_binary_message(bytearray(message))
         else:
             self.logger.warning(f"Received unexpected text message: {message}")
+
 
     def _on_ws_pong(self, ws, message):
         """Treat a WebSocket pong as proof the connection is alive.
@@ -885,8 +887,15 @@ class FyersHSMWebSocket:
 
     def _run_websocket(self):
         """Run WebSocket connection with automatic reconnection on failure"""
+        import os
         while self.running:
             try:
+                # Fyers WebSocket requires "app_id:access_token" in Authorization header
+                app_id = os.getenv("BROKER_API_KEY", "")
+                auth_hdr = self.access_token
+                if app_id and not auth_hdr.startswith(f"{app_id}:"):
+                    auth_hdr = f"{app_id}:{auth_hdr}"
+
                 # Create new WebSocket connection
                 self.ws = websocket.WebSocketApp(
                     self.HSM_URL,
@@ -896,7 +905,7 @@ class FyersHSMWebSocket:
                     on_close=self._on_ws_close,
                     on_ping=self._on_ws_ping,
                     on_pong=self._on_ws_pong,
-                    header={"Authorization": self.access_token, "User-Agent": f"{self.source}/1.0"},
+                    header={"Authorization": auth_hdr, "User-Agent": f"{self.source}/1.0"},
                 )
 
                 # Run until disconnection. Enable protocol ping/pong keepalive so
@@ -911,6 +920,7 @@ class FyersHSMWebSocket:
                 self.logger.error(f"HSM WebSocket run error: {e}")
 
             # Connection ended - check if we should reconnect
+
             self.connected = False
             self.authenticated = False
 
